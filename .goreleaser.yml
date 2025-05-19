@@ -15,21 +15,6 @@ builds:
       - amd64
       - arm64
 
-brews:
-  - homepage: "https://github.com/hmarr/codeowners"
-    description: "Determine who owns what according CODEOWNERS files"
-
-    repository:
-      owner: hmarr
-      name: homebrew-tap
-      token: "{{ .Env.HOMEBREW_TAP_RELEASE_TOKEN }}"
-
-    commit_author:
-      name: release-bot
-      email: release-bot@hmarr.com
-
-    directory: Formula
-
 checksum:
   name_template: 'checksums.txt'
 
