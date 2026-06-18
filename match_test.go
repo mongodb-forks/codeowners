@@ -3,6 +3,8 @@ package codeowners
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -55,5 +57,63 @@ func TestMatch(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestLiteralPrefix(t *testing.T) {
+	tests := []struct {
+		pattern string
+		want    string
+	}{
+		// Root-anchored patterns: the literal text up to the first wildcard.
+		{"/foo/bar/*.go", "foo/bar/"},
+		{"/foo/bar/**", "foo/bar/"},
+		{"/foo/bar/baz.go", "foo/bar/baz.go"},
+		{"/.github/workflows/**/*", ".github/workflows/"},
+		{"/foo/b*r", "foo/b"},
+		{"/foo?bar", "foo"},
+		// Wildcard in the first segment leaves no usable prefix.
+		{"/*.go", ""},
+		{"/*", ""},
+		// Unanchored patterns match relative to any directory, so no path prefix
+		// is guaranteed.
+		{"foo", ""},
+		{"*.go", ""},
+		{"foo/bar/*.go", ""},
+		// Escapes are treated conservatively: we stop at the backslash rather
+		// than interpret it, which still yields a valid (shorter) prefix.
+		{"/foo\\*bar", "foo"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.pattern, func(t *testing.T) {
+			assert.Equal(t, test.want, literalPrefix(test.pattern))
+		})
+	}
+}
+
+// TestLiteralPrefixIsNecessaryCondition guards the core safety property of the
+// prefix pre-filter: whenever a path actually matches a pattern, it must also
+// start with that pattern's literal prefix. If this ever failed, the filter
+// would discard real matches.
+func TestLiteralPrefixIsNecessaryCondition(t *testing.T) {
+	data, err := os.ReadFile("testdata/patterns.json")
+	require.NoError(t, err)
+
+	var tests []patternTest
+	require.NoError(t, json.Unmarshal(data, &tests))
+
+	for _, test := range tests {
+		prefix := literalPrefix(test.Pattern)
+		if prefix == "" {
+			continue
+		}
+		for path, shouldMatch := range test.Paths {
+			if shouldMatch {
+				assert.Truef(t, strings.HasPrefix(filepath.ToSlash(path), prefix),
+					"pattern %q matches path %q but path lacks required prefix %q",
+					test.Pattern, path, prefix)
+			}
+		}
 	}
 }

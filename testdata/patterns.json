@@ -305,5 +305,29 @@
          "foo/qux/bar/baz": true,
          "foo/qux/bar/qux": false
       }
+   },
+   {
+      "name": "deeply anchored wildcard pattern with sibling divergence",
+      "pattern": "/foo/bar/*.go",
+      "paths": {
+         "foo/bar/main.go": true,
+         "foo/bar/main.txt": false,
+         "foo/baz/main.go": false,
+         "foobar/main.go": false,
+         "foo/barbaz/main.go": false,
+         "foo/bar": false,
+         "other/foo/bar/main.go": false
+      }
+   },
+   {
+      "name": "deeply anchored trailing double-asterisk with sibling divergence",
+      "pattern": "/foo/bar/**",
+      "paths": {
+         "foo/bar/baz": true,
+         "foo/bar/baz/qux": true,
+         "foo/baz/qux": false,
+         "foobar/baz": false,
+         "foo/barbaz/qux": false
+      }
    }
 ]
