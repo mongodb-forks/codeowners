@@ -10,6 +10,7 @@ import (
 type pattern struct {
 	pattern             string
 	regex               *regexp.Regexp
+	regexPrefix         string
 	leftAnchoredLiteral bool
 }
 
@@ -25,9 +26,36 @@ func newPattern(patternStr string) (pattern, error) {
 			return pattern{}, err
 		}
 		pat.regex = patternRegex
+		// Any match must begin with this literal prefix, so we can cheaply
+		// reject non-matching paths with a string comparison before paying for
+		// a full (backtracking) regex evaluation.
+		pat.regexPrefix = literalPrefix(patternStr)
 	}
 
 	return pat, nil
+}
+
+// literalPrefix returns the leading literal path text that any matching path
+// must start with, or "" if no such prefix can be guaranteed. It's used as a
+// cheap pre-filter to avoid running the regex against paths that can't match.
+//
+// We compute it from the pattern string rather than via regexp.LiteralPrefix
+// because our regexes are anchored with \A, which that method treats as a
+// non-literal instruction and bails out on, yielding an empty prefix.
+func literalPrefix(patternStr string) string {
+	// Only root-anchored patterns (those with a leading slash) constrain the
+	// start of the path. Patterns without one match relative to any directory.
+	if patternStr[0] != '/' {
+		return ""
+	}
+	// Everything up to the first wildcard or escape is literal path text that a
+	// matching path must contain as a prefix. Stopping at '\' keeps us safe
+	// around escaped wildcards without having to interpret the escape.
+	s := patternStr[1:]
+	if i := strings.IndexAny(s, "*?\\"); i >= 0 {
+		s = s[:i]
+	}
+	return s
 }
 
 // match tests if the path provided matches the pattern
@@ -59,6 +87,12 @@ func (p pattern) match(testPath string) (bool, error) {
 		}
 
 		// Otherwise the test path must be shorter than the pattern, so it can't match
+		return false, nil
+	}
+
+	// Cheap rejection: if the regex requires a literal prefix the path doesn't
+	// have, it cannot match, so skip the expensive regex evaluation entirely.
+	if p.regexPrefix != "" && !strings.HasPrefix(testPath, p.regexPrefix) {
 		return false, nil
 	}
 
